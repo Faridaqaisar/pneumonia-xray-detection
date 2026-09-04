@@ -1,16 +1,28 @@
 """
 Streamlit UI for the pneumonia detector.
 
-Run with:
+Run locally with:
     streamlit run app/streamlit_app.py
 
-This talks to the FastAPI backend over HTTP, so make sure that's running too:
+Locally this talks to the FastAPI backend over HTTP, so make sure that's running too:
     uvicorn api.main:app --reload --port 8000
+
+When deployed to Streamlit Cloud, set a secret named API_URL pointing to your
+live backend (e.g. https://your-app.onrender.com/predict) in the app's Settings > Secrets.
 """
+import os
 import streamlit as st
 import requests
-import os
-API_URL = os.environ.get("API_URL", "http://localhost:8000/predict")
+
+
+def get_api_url():
+    try:
+        return st.secrets["API_URL"]
+    except Exception:
+        return os.environ.get("API_URL", "http://localhost:8000/predict")
+
+
+API_URL = get_api_url()
 
 st.set_page_config(page_title="Pneumonia X-Ray Detector", page_icon="🫁", layout="centered")
 
@@ -30,28 +42,32 @@ if uploaded_file is not None:
         st.image(uploaded_file, caption="Uploaded X-ray", use_container_width=True)
 
     with col2:
-        with st.spinner("Analyzing X-ray..."):
+        with st.spinner("Analyzing X-ray... (first request after idle time can take up to a minute)"):
             try:
                 files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
-                response = requests.post(API_URL, files=files, timeout=30)
-            except requests.exceptions.ConnectionError:
+                response = requests.post(API_URL, files=files, timeout=90)
+            except requests.exceptions.RequestException as e:
                 st.error(
-                    "Can't reach the prediction API. Make sure it's running:\n\n"
-                    "`uvicorn api.main:app --reload --port 8000`"
+                    f"Can't reach the prediction API right now ({type(e).__name__}). "
+                    "If this just deployed, the backend may still be starting up — try again in a minute."
                 )
                 st.stop()
 
         if response.status_code != 200:
-            st.error(f"Error: {response.json().get('detail', response.text)}")
+            try:
+                detail = response.json().get("detail", response.text)
+            except Exception:
+                detail = response.text
+            st.error(f"Error: {detail}")
         else:
             result = response.json()
             label = result["label"]
             confidence = result["confidence"]
 
             if label == "PNEUMONIA":
-                st.error(f"### Result: PNEUMONIA detected")
+                st.error("### Result: PNEUMONIA detected")
             else:
-                st.success(f"### Result: NORMAL")
+                st.success("### Result: NORMAL")
 
             st.metric("Confidence", f"{confidence * 100:.1f}%")
 
