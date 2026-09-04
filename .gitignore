@@ -7,4 +7,3 @@ data/val/
 data/test/
 kaggle.json
 .streamlit/secrets.toml
-models/*.joblib
