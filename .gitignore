@@ -1,9 +1,6 @@
 venv/
 .venv/
 __pycache__/
-*.pyc
 data/train/
-data/val/
 data/test/
 kaggle.json
-.streamlit/secrets.toml
